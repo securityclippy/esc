@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"net/http"
+	"os"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/olivere/elastic"
 	v4 "github.com/olivere/elastic/aws/v4"
@@ -57,7 +57,7 @@ func New(host, username, password string, useInsecure bool) *ESC {
 	}
 	esc := &ESC{
 		Client:    client,
-		batchSize: 1000,
+		batchSize: 250,
 	}
 	return esc
 }
@@ -65,8 +65,7 @@ func New(host, username, password string, useInsecure bool) *ESC {
 // NewAWS returns a new ESC client using environmental credentials to authenticate to an AWS elasticsearch service
 func NewAWS(host string) *ESC {
 	creds := credentials.NewEnvCredentials()
-	cfg := aws.NewConfig()
-	signingClient := v4.NewV4SigningClient(creds, *cfg.Region)
+	signingClient := v4.NewV4SigningClient(creds, os.Getenv("AWS_REGION"))
 	client, err := elastic.NewClient(
 		elastic.SetURL(host),
 		elastic.SetSniff(false),
@@ -78,7 +77,7 @@ func NewAWS(host string) *ESC {
 	}
 	esc := &ESC{
 		Client:    client,
-		batchSize: 1000,
+		batchSize: 250,
 	}
 
 	return esc
