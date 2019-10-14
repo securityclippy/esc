@@ -88,7 +88,7 @@ func NewAWS(host string) *ESC {
 	cfg := aws.NewConfig()
 	cfg.Region = aws.String(os.Getenv("AWS_REGION"))
 
-	sess, err := session.NewSession(aws.NewConfig())
+	sess, err := session.NewSession(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -102,6 +102,10 @@ func NewAWS(host string) *ESC {
 
 	}
 	creds := credentials.NewChainCredentials(providers)
+	_, err = creds.Get()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	signingClient := v4.NewV4SigningClient(creds, os.Getenv("AWS_REGION"))
 	client, err := elastic.NewClient(
