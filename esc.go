@@ -102,10 +102,12 @@ func NewAWS(host string) *ESC {
 
 	}
 	creds := credentials.NewChainCredentials(providers)
-	_, err = creds.Get()
+	resp, err := creds.Get()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	log.Infof("Using provider: %s\n", resp.ProviderName)
 
 	signingClient := v4.NewV4SigningClient(creds, os.Getenv("AWS_REGION"))
 	client, err := elastic.NewClient(
