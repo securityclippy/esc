@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/endpointcreds"
 	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"net/http"
@@ -71,6 +72,16 @@ func New(host, username, password string, useInsecure bool) *ESC {
 	return esc
 }
 
+func RemoteCredProvider(cfg aws.Config, handlers request.Handlers) credentials.Provider {
+	ecsCredURI := os.Getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
+
+	if len(ecsCredURI) > 0 {
+		return ecsCredProvider(cfg, handlers, ecsCredURI)
+	}
+
+	return ec2RoleProvider(cfg, handlers)
+}
+
 func ecsCredProvider(cfg aws.Config, handlers request.Handlers, uri string) credentials.Provider {
 	const host = `169.254.170.2`
 
@@ -82,24 +93,38 @@ func ecsCredProvider(cfg aws.Config, handlers request.Handlers, uri string) cred
 	)
 }
 
+func ec2RoleProvider(cfg aws.Config, handlers request.Handlers) credentials.Provider {
+	resolver := cfg.EndpointResolver
+	if resolver == nil {
+		resolver = endpoints.DefaultResolver()
+	}
+
+	e, _ := resolver.EndpointFor(endpoints.Ec2metadataServiceID, "")
+	return &ec2rolecreds.EC2RoleProvider{
+		Client:       ec2metadata.NewClient(cfg, handlers, e.URL, e.SigningRegion),
+		ExpiryWindow: 5 * time.Minute,
+	}
+}
+
+
 // NewAWS returns a new ESC client using environmental credentials to authenticate to an AWS elasticsearch service
 func NewAWS(host string) *ESC {
 
-	cfg := aws.NewConfig()
-	cfg.Region = aws.String(os.Getenv("AWS_REGION"))
 
-	sess, err := session.NewSession(cfg)
+	awsDefaults := defaults.Get()
+	awsDefaults.Config.Region = aws.String(os.Getenv("AWS_REGION"))
+
+	sess, err := session.NewSession(awsDefaults.Config)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	providers := []credentials.Provider{
+		RemoteCredProvider(*awsDefaults.Config, awsDefaults.Handlers),
 		&credentials.EnvProvider{},
 		&ec2rolecreds.EC2RoleProvider{
 			Client: ec2metadata.New(sess),
 		},
-		ecsCredProvider(*cfg, defaults.Handlers(), os.Getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")),
-
 	}
 	creds := credentials.NewChainCredentials(providers)
 	resp, err := creds.Get()
