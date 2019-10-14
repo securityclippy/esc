@@ -3,9 +3,18 @@ package esc
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/credentials/endpointcreds"
+	"github.com/aws/aws-sdk-go/aws/defaults"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/olivere/elastic"
@@ -62,9 +71,38 @@ func New(host, username, password string, useInsecure bool) *ESC {
 	return esc
 }
 
+func ecsCredProvider(cfg aws.Config, handlers request.Handlers, uri string) credentials.Provider {
+	const host = `169.254.170.2`
+
+	return endpointcreds.NewProviderClient(cfg, handlers,
+		fmt.Sprintf("http://%s%s", host, uri),
+		func(p *endpointcreds.Provider) {
+			p.ExpiryWindow = 5 * time.Minute
+		},
+	)
+}
+
 // NewAWS returns a new ESC client using environmental credentials to authenticate to an AWS elasticsearch service
 func NewAWS(host string) *ESC {
-	creds := credentials.NewEnvCredentials()
+
+	cfg := aws.NewConfig()
+	cfg.Region = aws.String(os.Getenv("AWS_REGION"))
+
+	sess, err := session.NewSession(aws.NewConfig())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	providers := []credentials.Provider{
+		&credentials.EnvProvider{},
+		&ec2rolecreds.EC2RoleProvider{
+			Client: ec2metadata.New(sess),
+		},
+		ecsCredProvider(*cfg, defaults.Handlers(), os.Getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")),
+
+	}
+	creds := credentials.NewChainCredentials(providers)
+
 	signingClient := v4.NewV4SigningClient(creds, os.Getenv("AWS_REGION"))
 	client, err := elastic.NewClient(
 		elastic.SetURL(host),
