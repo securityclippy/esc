@@ -26,44 +26,17 @@ func (e *ESC) UpsertInterfaceStream(objectStream chan interface{}, indexName str
 		return err
 	}
 
-	//bulk := e.Bulk().Index(indexName).Type("doc")
 	i := 0
 	for obj := range objectStream {
 		r := elastic.NewBulkIndexRequest().Index(indexName).Type("doc").Doc(obj)
 		bp.Add(r)
 		i ++
-		//bulk.Add(elastic.NewBulkIndexRequest().Doc(obj))
-		//if bulk.NumberOfActions() >= e.batchSize {
-			//result, err := bulk.Do(context.Background())
-			//if err != nil {
-				//return err
-			//}
-			//if len(result.Failed()) > 0 {
-				//for _, r := range result.Items {
-					//for k, v := range r {
-						//if v.Error != nil {
-							//fmt.Printf("K: %+v, V: %+v\n", k, v)
-						//}
-					//}
-				//}
-			//}
-		//}
 	}
 
 	err = bp.Flush()
 	if err != nil {
 		return err
 	}
-	//if bulk.NumberOfActions() > 0 {
-		//result, err := bulk.Do(context.Background())
-		//if err != nil {
-			//return err
-		//}
-		//if len(result.Failed()) > 0 {
-			//fmt.Printf("%d failed during upload\n", len(result.Failed()))
-		//}
-	//}
-	//fmt.Printf("Uploaded: %d to elasticsearch\n", i)
 
 	stats := bp.Stats()
 
@@ -86,3 +59,18 @@ func (e *ESC) UpsertInterfaceStream(objectStream chan interface{}, indexName str
 	}
 	return nil
 }
+
+func (e *ESC) UpsertInterface(obj interface{}, index string) error {
+
+	if err := e.upsertIndex(index); err != nil {
+		return err
+	}
+
+	_, err := e.Client.Index().Index(index).BodyJson(obj).Type("doc").Do(context.Background())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
