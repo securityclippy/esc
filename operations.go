@@ -8,7 +8,7 @@ import (
 	"github.com/olivere/elastic"
 )
 
-func (e *ESC) UpsertInterfaceStream(objectStream chan interface{}, indexName string) error {
+func (e *ESC) UpsertInterfaceStream(objectStream chan interface{}, indexName string, numWorkers, bulkActions int) error {
 	err := e.upsertIndex(indexName)
 	if err != nil {
 		return err
@@ -16,8 +16,8 @@ func (e *ESC) UpsertInterfaceStream(objectStream chan interface{}, indexName str
 
 	bp, err := e.Client.BulkProcessor().
 		Name("bulk-worker").
-		Workers(1).
-		BulkActions(10).
+		Workers(numWorkers).
+		BulkActions(bulkActions).
 		BulkSize(2 << 20).
 		FlushInterval(10 * time.Second).
 		Do(context.Background())
